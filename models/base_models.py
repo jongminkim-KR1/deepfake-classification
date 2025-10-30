@@ -32,7 +32,12 @@ class CNNClfWithFFT(nn.Module):
             nn.Conv2d(layer_size[1], layer_size[2], kernel_size=filter_size[2], stride=1, padding=padding_size[2]),
             nn.BatchNorm2d(layer_size[2]),
             nn.ReLU(),
-            nn.MaxPool2d(2)
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(layer_size[2], layer_size[2], kernel_size=filter_size[2], stride=1, padding=padding_size[2]),
+            nn.BatchNorm2d(layer_size[2]),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
         )
 
         self.magnitude_branch = nn.Sequential(
@@ -48,7 +53,12 @@ class CNNClfWithFFT(nn.Module):
             nn.Conv2d(layer_size[1], layer_size[3], kernel_size=filter_size[2], stride=1, padding=padding_size[2]),
             nn.BatchNorm2d(layer_size[3]),
             nn.ReLU(),
-            nn.MaxPool2d(2)
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(layer_size[3], layer_size[3], kernel_size=filter_size[2], stride=1, padding=padding_size[2]),
+            nn.BatchNorm2d(layer_size[3]),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
         )
 
         self.phase_branch = nn.Sequential(
@@ -64,12 +74,16 @@ class CNNClfWithFFT(nn.Module):
             nn.Conv2d(layer_size[1], layer_size[3], kernel_size=filter_size[2], stride=1, padding=padding_size[2]),
             nn.BatchNorm2d(layer_size[3]),
             nn.ReLU(),
-            nn.MaxPool2d(2)
+            nn.MaxPool2d(2),
+
+            nn.Conv2d(layer_size[3], layer_size[3], kernel_size=filter_size[2], stride=1, padding=padding_size[2]),
+            nn.BatchNorm2d(layer_size[3]),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
         )
 
         fc_input_size = layer_size[2] + 2*layer_size[3]
-        image_size = input_size // 4
-
+        image_size = input_size // 8
 
         self.fc = nn.Sequential(
             nn.Linear(fc_input_size*image_size*image_size, 256),
@@ -82,8 +96,8 @@ class CNNClfWithFFT(nn.Module):
         x_mag, x_pha = fft_2d(x)
 
         f_rgb = self.rgb_branch(x)
-        f_mag = self.magnitude_branch(x)
-        f_pha = self.phase_branch(x)
+        f_mag = self.magnitude_branch(x_mag)
+        f_pha = self.phase_branch(x_pha)
 
         fused = torch.cat([f_rgb, f_mag, f_pha], dim=1)
 
