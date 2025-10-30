@@ -41,7 +41,7 @@ class CNNClfWithFFT(nn.Module):
         )
 
         self.magnitude_branch = nn.Sequential(
-            nn.Conv2d(3, layer_size[0], kernel_size=filter_size[0], stride=1, padding=padding_size[0]),
+            nn.Conv2d(1, layer_size[0], kernel_size=filter_size[0], stride=1, padding=padding_size[0]),
             nn.BatchNorm2d(layer_size[0]),
             nn.ReLU(),
             
@@ -62,7 +62,7 @@ class CNNClfWithFFT(nn.Module):
         )
 
         self.phase_branch = nn.Sequential(
-            nn.Conv2d(3, layer_size[0], kernel_size=filter_size[0], stride=1, padding=padding_size[0]),
+            nn.Conv2d(1, layer_size[0], kernel_size=filter_size[0], stride=1, padding=padding_size[0]),
             nn.BatchNorm2d(layer_size[0]),
             nn.ReLU(),
             
@@ -90,6 +90,7 @@ class CNNClfWithFFT(nn.Module):
             nn.ReLU(),
             nn.Dropout(0.3),
             nn.Linear(256, num_classes),
+            
         )
 
     def forward(self, x):
