@@ -124,6 +124,8 @@ class FaceData(Dataset):
         self.paths = []
         
         # --- [수정 1] 이미지와 동영상을 모두 찾도록 변경 ---
+        IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+        VIDEO_EXTS = {".avi", ".mp4"}
         supported_exts = IMAGE_EXTS | VIDEO_EXTS
         for r, _, fs in os.walk(root):
             for f in fs:
