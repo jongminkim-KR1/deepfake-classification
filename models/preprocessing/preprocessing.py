@@ -118,39 +118,51 @@ class FaceData(Dataset):
         providers: Sequence[str] = ("CUDAExecutionProvider", "CPUExecutionProvider"),
         det_size: Tuple[int, int] = (640, 640),
         model="buffalo_l",
-        fallback_center=True, # 원본 코드에 있던 인자
-        transform = None
+        fallback_center=True,
+        transform=None
     ):
-        self.paths = []
-        
-        # --- [수정 1] 이미지와 동영상을 모두 찾도록 변경 ---
+        # self.paths 대신 (경로, 레이블) 튜플을 저장할 self.samples 리스트 사용
+        self.samples = []
+        self.class_to_idx = {'real': 0, 'ai_images': 1} # 클래스와 인덱스 매핑
+
         IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
         VIDEO_EXTS = {".avi", ".mp4"}
         supported_exts = IMAGE_EXTS | VIDEO_EXTS
-        for r, _, fs in os.walk(root):
-            for f in fs:
-                # 파일의 확장자를 소문자로 변경하여 확인
-                ext = os.path.splitext(f)[1].lower()
-                if ext in supported_exts:
-                    self.paths.append(os.path.join(r, f))
+
+        # --- [수정 1] 하위 폴더(real, ai_images)를 순회하며 레이블 할당 ---
+        for target_class in self.class_to_idx.keys():
+            class_index = self.class_to_idx[target_class]
+            target_dir = os.path.join(root, target_class)
+
+            if not os.path.isdir(target_dir):
+                print(f"⚠️ Warning: Directory not found, skipping: {target_dir}")
+                continue
+
+            # os.walk로 target_dir의 모든 하위 폴더까지 탐색
+            for r, _, fs in os.walk(target_dir):
+                for f in fs:
+                    ext = os.path.splitext(f)[1].lower()
+                    if ext in supported_exts:
+                        path = os.path.join(r, f)
+                        item = (path, class_index) # (파일 경로, 클래스 인덱스) 저장
+                        self.samples.append(item)
         # --- [수정 1 끝] ---
-                    
-        self.paths.sort()
-        if not self.paths:
-            raise RuntimeError(f"No images or videos found in '{root}'")
+
+        if not self.samples:
+            raise RuntimeError(f"No images or videos found in {root}/real or {root}/ai_images")
+        
+        print(f"✅ Found {len(self.samples)} files in {root}.")
 
         # 얼굴 탐지기 한 번만 초기화
         self.app = FaceAnalysis(name=model, providers=list(providers))
         self.app.prepare(ctx_id=0, det_size=det_size)
         
-        # --- [수정 2] transform이 None이면 'process' 함수를 기본값으로 사용 ---
+        # (이 부분은 원본 코드와 동일)
         if transform is None:
             self.transform = process
         else:
             self.transform = transform
-        # --- [수정 2 끝] ---
 
-        # 텐서 변환 설정
         t = [transforms.ToTensor()]
         if normalize:
             t.append(transforms.Normalize([0.5]*3, [0.5]*3))
@@ -158,14 +170,17 @@ class FaceData(Dataset):
         self.fallback_center = fallback_center
 
     def __len__(self):
-        return len(self.paths)
+        # --- [수정 2] self.paths 대신 self.samples 사용 ---
+        return len(self.samples)
 
     def __getitem__(self, i):
         IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
         VIDEO_EXTS = {".avi", ".mp4"}
-        path = self.paths[i]
         
-        # --- [수정 3] 파일 확장자에 따라 다르게 로드 ---
+        # --- [수정 3] 경로와 레이블을 self.samples에서 가져옴 ---
+        path, label = self.samples[i]
+        # --- [수정 3 끝] ---
+        
         ext = os.path.splitext(path)[1].lower()
         img = None
 
@@ -173,19 +188,18 @@ class FaceData(Dataset):
             img = cv2.imread(path)
         elif ext in VIDEO_EXTS:
             img = extract_middle_frame(path)
-        # --- [수정 3 끝] ---
 
         if img is None:
+            # 실패 시 다음 샘플을 로드하도록 None 대신 예외 발생 (또는 더미 데이터 반환)
             raise RuntimeError(f"Cannot read image or extract frame from: {path}")
 
-        # self.transform은 이제 'process' 함수 (또는 사용자가 지정한 함수)
         out = self.transform(img, self.app)
 
         if out is None:
-            # process 함수가 (예: 얼굴 탐지 실패 시) None을 반환할 경우
             raise RuntimeError(f"Failed to process file (e.g., face not found): {path}")
 
-        # BGR → RGB → PIL → Tensor
         out_rgb = cv2.cvtColor(out, cv2.COLOR_BGR2RGB)
         x = self.tf(Image.fromarray(out_rgb))
-        return x, 0
+        
+        # --- [수정 4] 하드코딩된 0 대신 실제 레이블 반환 ---
+        return x, label
